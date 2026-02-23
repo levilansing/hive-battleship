@@ -1,227 +1,111 @@
-# Task: Create HTML structure and basic layout
+---
+description: Use Bun instead of Node.js, npm, pnpm, or vite.
+globs: "*.ts, *.tsx, *.html, *.css, *.js, *.jsx, package.json"
+alwaysApply: false
+---
 
-## Description
+Default to using Bun instead of Node.js.
 
-Set up the React + TypeScript project with Vite and Tailwind CSS. Create the core component structure including two game boards (player and AI), header, and game controls. Establish the foundation for the battleship game UI.
+- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
+- Use `bun test` instead of `jest` or `vitest`
+- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
+- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
+- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
+- Bun automatically loads .env, so don't use dotenv.
 
-## Acceptance Criteria
+## APIs
 
-- Vite project initialized with React + TypeScript
-- Tailwind CSS configured and working
-- GameBoard component renders 10x10 grid (x2 for player and AI)
-- Header, Controls, and MessageArea components created
-- App runs in dev mode without errors
-- All TypeScript types defined in src/types/game.ts
-- Production build succeeds
+- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
+- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
+- `Bun.redis` for Redis. Don't use `ioredis`.
+- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
+- `WebSocket` is built-in. Don't use `ws`.
+- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
+- Bun.$`ls` instead of execa.
 
-## Implementation Plan
+## Testing
 
-## Implementation Plan (TypeScript + React + Tailwind)
+Use `bun test` to run tests.
 
-### Tech Stack
+```ts#index.test.ts
+import { test, expect } from "bun:test";
 
-- **React 18+** with TypeScript
-- **Tailwind CSS** for utility-first styling
-- **Vite** as build tool and dev server
-- **TypeScript** for type safety
-
-### Files to Create/Modify
-
-**Configuration & Setup:**
-
-- `package.json` - Dependencies (react, react-dom, typescript, vite, tailwindcss)
-- `tsconfig.json` - TypeScript configuration
-- `tailwind.config.js` - Tailwind configuration
-- `postcss.config.js` - PostCSS with Tailwind
-- `vite.config.ts` - Vite build configuration
-- `index.html` - Root HTML (minimal, just mounts React app)
-
-**Source Files:**
-
-- `src/main.tsx` - React app entry point
-- `src/App.tsx` - Main app component
-- `src/index.css` - Tailwind imports + global styles
-- `src/components/GameBoard.tsx` - Reusable board component
-- `src/components/Header.tsx` - Game header with title and stats
-- `src/components/Controls.tsx` - Game control buttons
-- `src/components/MessageArea.tsx` - AI personality and status messages
-- `src/types/game.ts` - TypeScript type definitions
-
-### Component Structure
-
-```tsx
-App.tsx (Main container)
-├── Header (title, stats)
-├── <main> grid container
-│   ├── GameBoard (player: true)
-│   └── GameBoard (player: false, isAI)
-├── Controls (buttons)
-└── MessageArea (AI snark, status)
+test("hello world", () => {
+  expect(1).toBe(1);
+});
 ```
 
-### Technical Approach
+## Frontend
 
-#### 1. **Project Initialization**
+Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
 
-```bash
-npm create vite@latest battleship -- --template react-ts
-cd battleship
-npm install
-npm install -D tailwindcss postcss autoprefixer
-npx tailwindcss init -p
+Server:
+
+```ts#index.ts
+import index from "./index.html"
+
+Bun.serve({
+  routes: {
+    "/": index,
+    "/api/users/:id": {
+      GET: (req) => {
+        return new Response(JSON.stringify({ id: req.params.id }));
+      },
+    },
+  },
+  // optional websocket support
+  websocket: {
+    open: (ws) => {
+      ws.send("Hello, world!");
+    },
+    message: (ws, message) => {
+      ws.send(message);
+    },
+    close: (ws) => {
+      // handle close
+    }
+  },
+  development: {
+    hmr: true,
+    console: true,
+  }
+})
 ```
 
-#### 2. **Tailwind Configuration**
+HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
 
-Configure `tailwind.config.js` to scan all TSX files:
-
-```js
-content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}']
+```html#index.html
+<html>
+  <body>
+    <h1>Hello, world!</h1>
+    <script type="module" src="./frontend.tsx"></script>
+  </body>
+</html>
 ```
 
-Add Tailwind directives to `src/index.css`:
+With the following `frontend.tsx`:
 
-```css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-```
+```tsx#frontend.tsx
+import React from "react";
 
-#### 3. **Component Architecture**
+// import .css files directly and it works
+import './index.css';
 
-**GameBoard Component:**
+import { createRoot } from "react-dom/client";
 
-- Props: `isPlayer: boolean`, `boardId: string`
-- Renders 10x10 grid using Tailwind grid classes
-- Each cell is a div with hover states and click handlers (prepared for future)
-- Uses `grid grid-cols-10 gap-1` for layout
+const root = createRoot(document.body);
 
-**Header Component:**
-
-- Game title with gradient text
-- Stats display (ships remaining, shots fired) - initially static
-- Responsive flex layout
-
-**Controls Component:**
-
-- Button group with Tailwind styled buttons
-- Start Game, Reset, Settings (disabled initially)
-- Hover and disabled states
-
-**MessageArea Component:**
-
-- Props: `message: string`, `isAiTalking: boolean`
-- Styled text area for AI personality
-- Different styling for AI vs system messages
-
-#### 4. **Type Definitions** (`src/types/game.ts`)
-
-```typescript
-export type CellState = 'empty' | 'ship' | 'hit' | 'miss';
-export type GamePhase = 'setup' | 'playing' | 'gameOver';
-
-export interface Cell {
-  row: number;
-  col: number;
-  state: CellState;
+export default function Frontend() {
+  return <h1>Hello, world!</h1>;
 }
 
-export interface BoardProps {
-  isPlayer: boolean;
-  boardId: string;
-}
+root.render(<Frontend />);
 ```
 
-#### 5. **Initial App.tsx Structure**
+Then, run index.ts
 
-```tsx
-- useState for game phase (initially 'setup')
-- Two GameBoard components (player and AI)
-- Tailwind container classes for responsive layout
-- CSS Grid or Flexbox for board positioning
+```sh
+bun --hot ./index.ts
 ```
 
-### Implementation Steps
-
- 1. **Initialize Vite + React + TypeScript project**
- 2. **Install and configure Tailwind CSS**
- 3. **Create type definitions** in `src/types/game.ts`
- 4. **Build GameBoard component** - 10x10 grid with Tailwind
- 5. **Build Header component** - title and stats placeholders
- 6. **Build Controls component** - button group
- 7. **Build MessageArea component** - styled message display
- 8. **Compose App.tsx** - wire all components together
- 9. **Configure index.html** - minimal root div, proper meta tags
-10. **Test dev server** - `npm run dev`, verify all components render
-
-### Tailwind Styling Strategy
-
-- **Boards**: `bg-blue-50`, `border-2 border-gray-300`, `rounded-lg`
-- **Cells**: `w-8 h-8`, `border border-gray-400`, `hover:bg-blue-200`
-- **Buttons**: `bg-blue-600 text-white`, `hover:bg-blue-700`, `disabled:opacity-50`
-- **Layout**: `container mx-auto`, `flex justify-between`, `gap-4`
-- **Responsive**: `lg:grid-cols-2`, `md:flex-col`, `sm:text-sm`
-
-### Edge Cases & Considerations
-
-- **Type safety**: All props typed, no `any` types
-- **Accessibility**: ARIA labels on boards, semantic button elements, proper heading hierarchy
-- **Responsive design**: Mobile-first Tailwind classes, boards stack on mobile
-- **Performance**: React.memo for GameBoard if needed (10x10 = 100 cells each)
-- **Dev experience**: Hot module replacement with Vite, TypeScript errors in IDE
-- **Build output**: Optimized bundle with Vite's Rollup-based build
-
-### Dependencies
-
-- None - this is the foundation task
-- Blocks: "Build interactive game board grid component" (will extend GameBoard)
-- Blocks: "Implement ship placement UI" (will add interactivity)
-- Blocks: "Add game control buttons and styling" (will enhance Controls)
-
-### Files Modified/Created Summary
-
-**Config (8 files):**
-
-- package.json, tsconfig.json, tailwind.config.js, postcss.config.js, vite.config.ts, index.html, .gitignore, README.md
-
-**Source (8 files):**
-
-- src/main.tsx, src/App.tsx, src/index.css
-- src/components/GameBoard.tsx
-- src/components/Header.tsx
-- src/components/Controls.tsx
-- src/components/MessageArea.tsx
-- src/types/game.ts
-
-### Testing Checklist
-
-- [ ] Vite dev server starts without errors (`npm run dev`)
-
-- [ ] TypeScript compiles with no errors
-
-- [ ] Tailwind classes apply correctly (check with browser devtools)
-
-- [ ] Two game boards render as 10x10 grids
-
-- [ ] Header displays with title
-
-- [ ] Control buttons render and show disabled states
-
-- [ ] Message area displays placeholder text
-
-- [ ] Responsive layout works on mobile viewport
-
-- [ ] Build command succeeds (`npm run build`)
-
-- [ ] Production preview works (`npm run preview`)
-
-- [ ] No console errors or warnings
-
-- [ ] All components are properly typed (no TypeScript errors)
-
-## Instructions
-
-1. Implement the task as described above.
-2. Follow the project conventions.
-3. Commit your work with a descriptive message.
-4. Exit when done.
+For more information, read the Bun API docs in `node_modules/bun-types/docs/**.md`.

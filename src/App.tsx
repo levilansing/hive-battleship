@@ -7,13 +7,16 @@ import ShipPlacement from './components/ShipPlacement';
 import ShipStatus from './components/ShipStatus';
 import { useGameBoard } from './hooks/useGameBoard';
 import { useShipPlacement } from './hooks/useShipPlacement';
-import { getAiAttack, areAllShipsSunk, findShipAtPosition, isShipSunk } from './utils/gameRules';
+import { useAI } from './hooks/useAI';
+import { areAllShipsSunk, findShipAtPosition, isShipSunk } from './utils/gameRules';
+import { getAIMessage, formatAIMessage, calculateGameState, type AIMessageContext } from './utils/aiMessages';
 import type { GamePhase, Orientation } from './types/game';
 
 function App() {
   const [gamePhase, setGamePhase] = useState<GamePhase>('setup');
   const [message, setMessage] = useState('Welcome to Battleship! Place your ships to begin...');
   const [isAiTalking, setIsAiTalking] = useState(false);
+  const [usedMessages, setUsedMessages] = useState<Set<string>>(new Set());
 
   // Initialize board states for player and AI
   const playerBoard = useGameBoard();
@@ -21,6 +24,9 @@ function App() {
 
   // Ship placement state
   const shipPlacement = useShipPlacement();
+
+  // AI intelligence
+  const ai = useAI();
 
   // Keyboard listener for rotation
   useEffect(() => {
@@ -36,57 +42,37 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [gamePhase, shipPlacement]);
 
-  // Randomly place AI ships
+  // Randomly place AI ships using smart AI
   const placeAiShips = useCallback(() => {
-    const ships = [
-      { id: 'ai-carrier', name: 'Carrier', size: 5 },
-      { id: 'ai-battleship', name: 'Battleship', size: 4 },
-      { id: 'ai-cruiser', name: 'Cruiser', size: 3 },
-      { id: 'ai-submarine', name: 'Submarine', size: 3 },
-      { id: 'ai-destroyer', name: 'Destroyer', size: 2 },
-    ];
+    ai.placeAIShips(aiBoard.placeShip);
+  }, [ai, aiBoard]);
 
-    ships.forEach((ship) => {
-      let placed = false;
-      let attempts = 0;
-      const maxAttempts = 100;
+  // Get AI personality message based on game context
+  const getAIPersonalityMessage = useCallback((
+    eventType: AIMessageContext['eventType'],
+    shipName?: string
+  ): string => {
+    const playerShipsRemaining = playerBoard.boardState.placedShips.filter(
+      ship => !isShipSunk(ship)
+    ).length;
+    const aiShipsRemaining = aiBoard.boardState.placedShips.filter(
+      ship => !isShipSunk(ship)
+    ).length;
 
-      while (!placed && attempts < maxAttempts) {
-        const orientation: Orientation = Math.random() > 0.5 ? 'horizontal' : 'vertical';
-        const row = Math.floor(Math.random() * 10);
-        const col = Math.floor(Math.random() * 10);
+    const context: AIMessageContext = {
+      gameState: calculateGameState(playerShipsRemaining, aiShipsRemaining),
+      eventType,
+      playerShipsRemaining,
+      aiShipsRemaining,
+    };
 
-        // Check if ship fits
-        const fitsHorizontal = orientation === 'horizontal' && col + ship.size <= 10;
-        const fitsVertical = orientation === 'vertical' && row + ship.size <= 10;
+    const rawMessage = getAIMessage(context, usedMessages);
+    const formattedMessage = formatAIMessage(rawMessage, shipName);
 
-        if (!fitsHorizontal && !fitsVertical) {
-          attempts++;
-          continue;
-        }
+    setUsedMessages(prev => new Set([...prev, rawMessage]));
 
-        // Check for overlaps
-        let canPlace = true;
-        for (let i = 0; i < ship.size; i++) {
-          const checkRow = orientation === 'horizontal' ? row : row + i;
-          const checkCol = orientation === 'horizontal' ? col + i : col;
-          const cell = aiBoard.boardState.cells[checkRow]?.[checkCol];
-
-          if (!cell || cell.hasShip) {
-            canPlace = false;
-            break;
-          }
-        }
-
-        if (canPlace) {
-          aiBoard.placeShip(ship.id, ship.name, ship.size, row, col, orientation);
-          placed = true;
-        }
-
-        attempts++;
-      }
-    });
-  }, [aiBoard]);
+    return formattedMessage;
+  }, [playerBoard.boardState.placedShips, aiBoard.boardState.placedShips, usedMessages]);
 
   const handlePlayerCellClick = (row: number, col: number) => {
     if (gamePhase === 'setup' && shipPlacement.selectedShip) {
@@ -141,23 +127,26 @@ function App() {
       // Check if ship was sunk after this hit
       setTimeout(() => {
         if (hitShip && isShipSunk({ ...hitShip, hits: hitShip.hits + 1 })) {
-          setMessage(`Direct hit at ${String.fromCharCode(65 + col)}${row + 1}! You sunk the enemy ${hitShip.name}!`);
-          setIsAiTalking(false);
+          const aiReaction = getAIPersonalityMessage('player_sunk_ship', hitShip.name);
+          setMessage(`Direct hit at ${String.fromCharCode(65 + col)}${row + 1}! You sunk the enemy ${hitShip.name}! "${aiReaction}"`);
+          setIsAiTalking(true);
 
           // Check for player win
           setTimeout(() => {
             if (areAllShipsSunk(aiBoard.boardState)) {
               setGamePhase('gameOver');
-              setMessage('🎉 Congratulations! You sank all enemy ships! You win!');
-              setIsAiTalking(false);
+              const aiReaction = getAIPersonalityMessage('player_wins');
+              setMessage(`🎉 Congratulations! You sank all enemy ships! You win! "${aiReaction}"`);
+              setIsAiTalking(true);
             } else {
               // AI counter-attack
               performAiAttack();
             }
           }, 1500);
         } else {
-          setMessage(`Direct hit at ${String.fromCharCode(65 + col)}${row + 1}!`);
-          setIsAiTalking(false);
+          const aiReaction = getAIPersonalityMessage('player_hit');
+          setMessage(`Direct hit at ${String.fromCharCode(65 + col)}${row + 1}! "${aiReaction}"`);
+          setIsAiTalking(true);
 
           // AI counter-attack after short delay
           setTimeout(() => {
@@ -166,7 +155,8 @@ function App() {
         }
       }, 100);
     } else {
-      setMessage(`Miss at ${String.fromCharCode(65 + col)}${row + 1}. "Is that the best you can do?"`);
+      const aiTaunt = getAIPersonalityMessage('player_miss');
+      setMessage(`Miss at ${String.fromCharCode(65 + col)}${row + 1}. "${aiTaunt}"`);
       setIsAiTalking(true);
 
       // AI counter-attack
@@ -177,7 +167,7 @@ function App() {
   };
 
   const performAiAttack = () => {
-    const aiTarget = getAiAttack(playerBoard.boardState);
+    const aiTarget = ai.getAIMove(playerBoard.boardState);
     if (!aiTarget) {
       setMessage('AI has no more moves!');
       return;
@@ -191,25 +181,31 @@ function App() {
 
     playerBoard.updateCell(row, col, newState);
 
+    // Record the hit to enable target mode
+    ai.recordHit(row, col, newState === 'hit');
+
     if (newState === 'hit') {
       const hitShip = findShipAtPosition(playerBoard.boardState, row, col);
 
       // Check if ship was sunk
       setTimeout(() => {
         if (hitShip && isShipSunk({ ...hitShip, hits: hitShip.hits + 1 })) {
-          setMessage(`AI hit your ${hitShip.name} at ${String.fromCharCode(65 + col)}${row + 1} and sunk it! "Your fleet is weakening!"`);
+          const aiGloat = getAIPersonalityMessage('ai_sunk_ship', hitShip.name);
+          setMessage(`AI hit your ${hitShip.name} at ${String.fromCharCode(65 + col)}${row + 1} and sunk it! "${aiGloat}"`);
           setIsAiTalking(true);
 
           // Check for AI win
           setTimeout(() => {
             if (areAllShipsSunk(playerBoard.boardState)) {
               setGamePhase('gameOver');
-              setMessage('💀 All your ships have been destroyed! AI wins!');
+              const aiVictory = getAIPersonalityMessage('ai_wins');
+              setMessage(`💀 All your ships have been destroyed! AI wins! "${aiVictory}"`);
               setIsAiTalking(true);
             }
           }, 1500);
         } else {
-          setMessage(`AI hit your ship at ${String.fromCharCode(65 + col)}${row + 1}! "Got you!"`);
+          const aiGloat = getAIPersonalityMessage('ai_hit');
+          setMessage(`AI hit your ship at ${String.fromCharCode(65 + col)}${row + 1}! "${aiGloat}"`);
           setIsAiTalking(true);
         }
       }, 100);
@@ -232,7 +228,8 @@ function App() {
     }
     placeAiShips();
     setGamePhase('playing');
-    setMessage("Let's see if you can handle this, captain...");
+    const aiGreeting = getAIPersonalityMessage('game_start');
+    setMessage(aiGreeting);
     setIsAiTalking(true);
   };
 
@@ -243,6 +240,8 @@ function App() {
     playerBoard.resetBoard();
     aiBoard.resetBoard();
     shipPlacement.resetPlacement();
+    ai.reset();
+    setUsedMessages(new Set());
   };
 
   return (

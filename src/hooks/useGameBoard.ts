@@ -19,11 +19,32 @@ export function useGameBoard() {
     (row: number, col: number, newState: CellState) => {
       setBoardState((prev) => {
         const newCells = prev.cells.map((r) => r.map((c) => ({ ...c })));
+        const newPlacedShips = [...prev.placedShips];
+
         if (newCells[row]?.[col]) {
           newCells[row][col].state = newState;
           newCells[row][col].isGuessed = true;
+
+          // If it's a hit, increment the ship's hit counter
+          if (newState === 'hit' && newCells[row][col]?.shipId) {
+            const shipId = newCells[row][col].shipId!;
+            const shipIndex = newPlacedShips.findIndex(s => s.shipId === shipId);
+            if (shipIndex !== -1 && newPlacedShips[shipIndex]) {
+              const ship = newPlacedShips[shipIndex];
+              newPlacedShips[shipIndex] = {
+                shipId: ship.shipId,
+                name: ship.name,
+                size: ship.size,
+                startRow: ship.startRow,
+                startCol: ship.startCol,
+                orientation: ship.orientation,
+                hits: ship.hits + 1,
+              };
+            }
+          }
         }
-        return { ...prev, cells: newCells };
+
+        return { cells: newCells, placedShips: newPlacedShips };
       });
     },
     []

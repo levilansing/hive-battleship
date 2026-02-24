@@ -7,7 +7,8 @@ import ShipPlacement from './components/ShipPlacement';
 import ShipStatus from './components/ShipStatus';
 import { useGameBoard } from './hooks/useGameBoard';
 import { useShipPlacement } from './hooks/useShipPlacement';
-import { getAiAttack, areAllShipsSunk, findShipAtPosition, isShipSunk } from './utils/gameRules';
+import { useAI } from './hooks/useAI';
+import { areAllShipsSunk, findShipAtPosition, isShipSunk } from './utils/gameRules';
 import type { GamePhase, Orientation } from './types/game';
 
 function App() {
@@ -21,6 +22,9 @@ function App() {
 
   // Ship placement state
   const shipPlacement = useShipPlacement();
+
+  // AI intelligence
+  const ai = useAI();
 
   // Keyboard listener for rotation
   useEffect(() => {
@@ -36,57 +40,10 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [gamePhase, shipPlacement]);
 
-  // Randomly place AI ships
+  // Randomly place AI ships using smart AI
   const placeAiShips = useCallback(() => {
-    const ships = [
-      { id: 'ai-carrier', name: 'Carrier', size: 5 },
-      { id: 'ai-battleship', name: 'Battleship', size: 4 },
-      { id: 'ai-cruiser', name: 'Cruiser', size: 3 },
-      { id: 'ai-submarine', name: 'Submarine', size: 3 },
-      { id: 'ai-destroyer', name: 'Destroyer', size: 2 },
-    ];
-
-    ships.forEach((ship) => {
-      let placed = false;
-      let attempts = 0;
-      const maxAttempts = 100;
-
-      while (!placed && attempts < maxAttempts) {
-        const orientation: Orientation = Math.random() > 0.5 ? 'horizontal' : 'vertical';
-        const row = Math.floor(Math.random() * 10);
-        const col = Math.floor(Math.random() * 10);
-
-        // Check if ship fits
-        const fitsHorizontal = orientation === 'horizontal' && col + ship.size <= 10;
-        const fitsVertical = orientation === 'vertical' && row + ship.size <= 10;
-
-        if (!fitsHorizontal && !fitsVertical) {
-          attempts++;
-          continue;
-        }
-
-        // Check for overlaps
-        let canPlace = true;
-        for (let i = 0; i < ship.size; i++) {
-          const checkRow = orientation === 'horizontal' ? row : row + i;
-          const checkCol = orientation === 'horizontal' ? col + i : col;
-          const cell = aiBoard.boardState.cells[checkRow]?.[checkCol];
-
-          if (!cell || cell.hasShip) {
-            canPlace = false;
-            break;
-          }
-        }
-
-        if (canPlace) {
-          aiBoard.placeShip(ship.id, ship.name, ship.size, row, col, orientation);
-          placed = true;
-        }
-
-        attempts++;
-      }
-    });
-  }, [aiBoard]);
+    ai.placeAIShips(aiBoard.placeShip);
+  }, [ai, aiBoard]);
 
   const handlePlayerCellClick = (row: number, col: number) => {
     if (gamePhase === 'setup' && shipPlacement.selectedShip) {
@@ -177,7 +134,7 @@ function App() {
   };
 
   const performAiAttack = () => {
-    const aiTarget = getAiAttack(playerBoard.boardState);
+    const aiTarget = ai.getAIMove(playerBoard.boardState);
     if (!aiTarget) {
       setMessage('AI has no more moves!');
       return;
@@ -190,6 +147,9 @@ function App() {
     const newState = cell.hasShip ? 'hit' : 'miss';
 
     playerBoard.updateCell(row, col, newState);
+
+    // Record the hit to enable target mode
+    ai.recordHit(row, col, newState === 'hit');
 
     if (newState === 'hit') {
       const hitShip = findShipAtPosition(playerBoard.boardState, row, col);
@@ -243,6 +203,7 @@ function App() {
     playerBoard.resetBoard();
     aiBoard.resetBoard();
     shipPlacement.resetPlacement();
+    ai.reset();
   };
 
   return (

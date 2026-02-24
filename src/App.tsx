@@ -17,6 +17,7 @@ function App() {
   const [message, setMessage] = useState('Welcome to Battleship! Place your ships to begin...');
   const [isAiTalking, setIsAiTalking] = useState(false);
   const [usedMessages, setUsedMessages] = useState<Set<string>>(new Set());
+  const [aiIsThinking, setAiIsThinking] = useState(false);
 
   // Initialize board states for player and AI
   const playerBoard = useGameBoard();
@@ -109,6 +110,11 @@ function App() {
       return;
     }
 
+    if (aiIsThinking) {
+      setMessage('Wait for AI to finish!');
+      return;
+    }
+
     const cell = aiBoard.boardState.cells[row]?.[col];
     if (!cell) return;
 
@@ -167,52 +173,66 @@ function App() {
   };
 
   const performAiAttack = () => {
-    const aiTarget = ai.getAIMove(playerBoard.boardState);
-    if (!aiTarget) {
-      setMessage('AI has no more moves!');
-      return;
-    }
+    setAiIsThinking(true);
+    setMessage('AI is calculating its next move...');
+    setIsAiTalking(false);
 
-    const { row, col } = aiTarget;
-    const cell = playerBoard.boardState.cells[row]?.[col];
-    if (!cell) return;
+    // Add AI "thinking" delay (300-800ms for realism)
+    const thinkDelay = 300 + Math.random() * 500;
 
-    const newState = cell.hasShip ? 'hit' : 'miss';
+    setTimeout(() => {
+      const aiTarget = ai.getAIMove(playerBoard.boardState);
+      if (!aiTarget) {
+        setMessage('AI has no more moves!');
+        setAiIsThinking(false);
+        return;
+      }
 
-    playerBoard.updateCell(row, col, newState);
+      const { row, col } = aiTarget;
+      const cell = playerBoard.boardState.cells[row]?.[col];
+      if (!cell) {
+        setAiIsThinking(false);
+        return;
+      }
 
-    // Record the hit to enable target mode
-    ai.recordHit(row, col, newState === 'hit');
+      const newState = cell.hasShip ? 'hit' : 'miss';
 
-    if (newState === 'hit') {
-      const hitShip = findShipAtPosition(playerBoard.boardState, row, col);
+      playerBoard.updateCell(row, col, newState);
+      setAiIsThinking(false);
 
-      // Check if ship was sunk
-      setTimeout(() => {
-        if (hitShip && isShipSunk({ ...hitShip, hits: hitShip.hits + 1 })) {
-          const aiGloat = getAIPersonalityMessage('ai_sunk_ship', hitShip.name);
-          setMessage(`AI hit your ${hitShip.name} at ${String.fromCharCode(65 + col)}${row + 1} and sunk it! "${aiGloat}"`);
-          setIsAiTalking(true);
+      // Record the hit to enable target mode
+      ai.recordHit(row, col, newState === 'hit');
 
-          // Check for AI win
-          setTimeout(() => {
-            if (areAllShipsSunk(playerBoard.boardState)) {
-              setGamePhase('gameOver');
-              const aiVictory = getAIPersonalityMessage('ai_wins');
-              setMessage(`💀 All your ships have been destroyed! AI wins! "${aiVictory}"`);
-              setIsAiTalking(true);
-            }
-          }, 1500);
-        } else {
-          const aiGloat = getAIPersonalityMessage('ai_hit');
-          setMessage(`AI hit your ship at ${String.fromCharCode(65 + col)}${row + 1}! "${aiGloat}"`);
-          setIsAiTalking(true);
-        }
-      }, 100);
-    } else {
-      setMessage(`AI missed at ${String.fromCharCode(65 + col)}${row + 1}. Your turn!`);
-      setIsAiTalking(false);
-    }
+      if (newState === 'hit') {
+        const hitShip = findShipAtPosition(playerBoard.boardState, row, col);
+
+        // Check if ship was sunk
+        setTimeout(() => {
+          if (hitShip && isShipSunk({ ...hitShip, hits: hitShip.hits + 1 })) {
+            const aiGloat = getAIPersonalityMessage('ai_sunk_ship', hitShip.name);
+            setMessage(`AI hit your ${hitShip.name} at ${String.fromCharCode(65 + col)}${row + 1} and sunk it! "${aiGloat}"`);
+            setIsAiTalking(true);
+
+            // Check for AI win
+            setTimeout(() => {
+              if (areAllShipsSunk(playerBoard.boardState)) {
+                setGamePhase('gameOver');
+                const aiVictory = getAIPersonalityMessage('ai_wins');
+                setMessage(`💀 All your ships have been destroyed! AI wins! "${aiVictory}"`);
+                setIsAiTalking(true);
+              }
+            }, 1500);
+          } else {
+            const aiGloat = getAIPersonalityMessage('ai_hit');
+            setMessage(`AI hit your ship at ${String.fromCharCode(65 + col)}${row + 1}! "${aiGloat}"`);
+            setIsAiTalking(true);
+          }
+        }, 100);
+      } else {
+        setMessage(`AI missed at ${String.fromCharCode(65 + col)}${row + 1}. Your turn!`);
+        setIsAiTalking(false);
+      }
+    }, thinkDelay);
   };
 
   const handleCellHover = (row: number, col: number) => {
@@ -237,6 +257,7 @@ function App() {
     setGamePhase('setup');
     setMessage('Welcome to Battleship! Place your ships to begin...');
     setIsAiTalking(false);
+    setAiIsThinking(false);
     playerBoard.resetBoard();
     aiBoard.resetBoard();
     shipPlacement.resetPlacement();
@@ -308,6 +329,26 @@ function App() {
           onReset={handleReset}
           gameStarted={gamePhase !== 'setup'}
         />
+
+        {aiIsThinking && (
+          <div className="flex items-center justify-center gap-2 py-2">
+            <div className="flex gap-1">
+              <span
+                className="w-2 h-2 bg-blue-600 rounded-full animate-typing-dots"
+                style={{ animationDelay: '0s' }}
+              />
+              <span
+                className="w-2 h-2 bg-blue-600 rounded-full animate-typing-dots"
+                style={{ animationDelay: '0.2s' }}
+              />
+              <span
+                className="w-2 h-2 bg-blue-600 rounded-full animate-typing-dots"
+                style={{ animationDelay: '0.4s' }}
+              />
+            </div>
+            <span className="text-blue-700 font-semibold">AI is thinking...</span>
+          </div>
+        )}
 
         <MessageArea message={message} isAiTalking={isAiTalking} />
       </main>

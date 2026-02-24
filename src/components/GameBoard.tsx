@@ -69,6 +69,7 @@ const GameBoard: React.FC<BoardProps> = ({
                     showShip={showShips || isPlayer}
                     isPreview={isPreviewCell(row, col)}
                     previewValid={shipPreview?.valid ?? true}
+                    isInteractive={!isPlayer}
                   />
                 );
               })}

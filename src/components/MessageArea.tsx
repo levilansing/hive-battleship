@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface MessageAreaProps {
   message?: string;
@@ -9,6 +9,29 @@ const MessageArea: React.FC<MessageAreaProps> = ({
   message = 'Welcome to Battleship! Place your ships to begin...',
   isAiTalking = false,
 }) => {
+  const [displayedMessage, setDisplayedMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+
+  // Typing effect
+  useEffect(() => {
+    setIsTyping(true);
+    setDisplayedMessage('');
+
+    let currentIndex = 0;
+    const typingInterval = setInterval(() => {
+      if (currentIndex <= message.length) {
+        setDisplayedMessage(message.slice(0, currentIndex));
+        currentIndex++;
+      } else {
+        clearInterval(typingInterval);
+        setIsTyping(false);
+      }
+    }, 30); // 30ms per character
+
+    return () => clearInterval(typingInterval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [message]);
+
   // Enhanced styling for AI messages to make personality more engaging
   const getBgStyle = () => {
     if (isAiTalking) {
@@ -45,7 +68,9 @@ const MessageArea: React.FC<MessageAreaProps> = ({
         className={`p-4 rounded-lg shadow-lg transition-all duration-300 ${getBgStyle()}`}
       >
         <p className={`text-center ${getTextStyle()}`}>
-          {isAiTalking && '🤖 '}{message}
+          {isAiTalking && '🤖 '}
+          {displayedMessage}
+          {isTyping && <span className="animate-pulse">▌</span>}
         </p>
       </div>
     </div>

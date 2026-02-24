@@ -141,20 +141,23 @@ function getAdjacentCells(row: number, col: number): Array<{ row: number; col: n
  * @param boardState - The opponent's board state
  * @param hitStack - Stack of cells to target (for target mode)
  * @param seed - Random seed for deterministic behavior
- * @returns Next cell coordinates to attack, or null if no valid targets
+ * @returns Object with next cell coordinates and updated hit stack
  */
 export function getNextTarget(
   boardState: BoardState,
   hitStack: Array<{ row: number; col: number }>,
   seed: number
-): { row: number; col: number } | null {
+): { target: { row: number; col: number } | null; newHitStack: Array<{ row: number; col: number }> } {
+  // Create a copy to avoid mutating the input
+  const stackCopy = [...hitStack];
+
   // Target mode: prioritize cells from hit stack
-  while (hitStack.length > 0) {
-    const target = hitStack.pop()!;
+  while (stackCopy.length > 0) {
+    const target = stackCopy.pop()!;
     const cell = boardState.cells[target.row]?.[target.col];
 
     if (cell && !cell.isGuessed) {
-      return target;
+      return { target, newHitStack: stackCopy };
     }
   }
 
@@ -171,13 +174,14 @@ export function getNextTarget(
   }
 
   if (unguessedCells.length === 0) {
-    return null;
+    return { target: null, newHitStack: [] };
   }
 
   // Use seeded random to select a cell
   const rng = new SeededRandom(seed);
   const index = rng.nextInt(0, unguessedCells.length);
-  return unguessedCells[index] ?? null;
+  const target = unguessedCells[index] ?? null;
+  return { target, newHitStack: [] };
 }
 
 /**

@@ -46,7 +46,12 @@ export function useAI(initialSeed?: number): UseAIReturn {
     const moveSeed = seedRef.current + moveCountRef.current;
     moveCountRef.current++;
 
-    return getNextTarget(boardState, hitStack, moveSeed);
+    const result = getNextTarget(boardState, hitStack, moveSeed);
+
+    // Update hit stack with the new state (removes checked cells)
+    setHitStack(result.newHitStack);
+
+    return result.target;
   }, [hitStack]);
 
   const recordHit = useCallback((row: number, col: number, isHit: boolean) => {

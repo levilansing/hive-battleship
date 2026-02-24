@@ -6,6 +6,7 @@ import MessageArea from './components/MessageArea';
 import ShipPlacement from './components/ShipPlacement';
 import { useGameBoard } from './hooks/useGameBoard';
 import { useShipPlacement } from './hooks/useShipPlacement';
+import { getMessage, resetMessageHistory, getCoordinateString } from './utils/aiMessages';
 import type { GamePhase } from './types/game';
 
 function App() {
@@ -55,15 +56,17 @@ function App() {
           shipPlacement.orientation
         );
         shipPlacement.markShipAsPlaced(shipPlacement.selectedShip.id);
-        setMessage(`${shipPlacement.selectedShip.name} placed at ${String.fromCharCode(65 + col)}${row + 1}!`);
+        setMessage(`${shipPlacement.selectedShip.name} placed at ${getCoordinateString(row, col)}!`);
+        setIsAiTalking(false);
       } else {
         setMessage('Cannot place ship here. Check for overlaps or boundaries.');
+        setIsAiTalking(false);
       }
     }
   };
 
   const handleAiCellClick = (row: number, col: number) => {
-    console.log(`AI board clicked: ${String.fromCharCode(65 + col)}${row + 1}`);
+    console.log(`AI board clicked: ${getCoordinateString(row, col)}`);
     if (gamePhase === 'playing') {
       const cell = aiBoard.boardState.cells[row]?.[col];
       if (!cell) return;
@@ -73,17 +76,26 @@ function App() {
         aiBoard.updateCell(row, col, newState);
 
         if (newState === 'hit') {
-          setMessage(`Direct hit at ${String.fromCharCode(65 + col)}${row + 1}!`);
-          setIsAiTalking(false);
+          // Check if ship was sunk
+          const sunkInfo = aiBoard.checkIfShipSunk(cell.shipId);
+          if (sunkInfo?.sunk) {
+            setMessage(`${sunkInfo.shipName} sunk at ${getCoordinateString(row, col)}! ${getMessage('playerSinkShip')}`);
+            setIsAiTalking(true);
+          } else {
+            setMessage(`Direct hit at ${getCoordinateString(row, col)}! ${getMessage('playerHit')}`);
+            setIsAiTalking(true);
+          }
         } else {
-          setMessage(`Miss at ${String.fromCharCode(65 + col)}${row + 1}. "Is that the best you can do?"`);
+          setMessage(getMessage('playerMiss'));
           setIsAiTalking(true);
         }
       } else {
-        setMessage('You already tried that spot, captain!');
+        setMessage(getMessage('alreadyGuessed'));
+        setIsAiTalking(false);
       }
     } else {
       setMessage('Start the game first!');
+      setIsAiTalking(false);
     }
   };
 
@@ -96,10 +108,12 @@ function App() {
   const handleStartGame = () => {
     if (!shipPlacement.allShipsPlaced) {
       setMessage('Please place all ships before starting the game!');
+      setIsAiTalking(false);
       return;
     }
+    resetMessageHistory();
     setGamePhase('playing');
-    setMessage("Let's see if you can handle this, captain...");
+    setMessage(getMessage('gameStart'));
     setIsAiTalking(true);
   };
 
@@ -107,6 +121,7 @@ function App() {
     setGamePhase('setup');
     setMessage('Welcome to Battleship! Place your ships to begin...');
     setIsAiTalking(false);
+    resetMessageHistory();
     playerBoard.resetBoard();
     aiBoard.resetBoard();
     shipPlacement.resetPlacement();

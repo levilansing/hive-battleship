@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Header from './components/Header';
 import GameBoard from './components/GameBoard';
 import Controls from './components/Controls';
 import MessageArea from './components/MessageArea';
+import ShipPlacement from './components/ShipPlacement';
 import { useGameBoard } from './hooks/useGameBoard';
+import { useShipPlacement } from './hooks/useShipPlacement';
 import type { GamePhase } from './types/game';
 
 function App() {
@@ -15,10 +17,48 @@ function App() {
   const playerBoard = useGameBoard();
   const aiBoard = useGameBoard();
 
+  // Ship placement state
+  const shipPlacement = useShipPlacement();
+
+  // Keyboard listener for rotation
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'r' || e.key === 'R') {
+        if (gamePhase === 'setup' && shipPlacement.selectedShip) {
+          shipPlacement.toggleOrientation();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [gamePhase, shipPlacement]);
+
   const handlePlayerCellClick = (row: number, col: number) => {
-    console.log(`Player board clicked: ${String.fromCharCode(65 + col)}${row + 1}`);
-    if (gamePhase === 'setup') {
-      setMessage(`Clicked cell ${String.fromCharCode(65 + col)}${row + 1} on your board`);
+    if (gamePhase === 'setup' && shipPlacement.selectedShip) {
+      // Try to place the selected ship
+      const canPlace = shipPlacement.canPlaceShip(
+        row,
+        col,
+        shipPlacement.selectedShip.size,
+        shipPlacement.orientation,
+        playerBoard.boardState
+      );
+
+      if (canPlace) {
+        playerBoard.placeShip(
+          shipPlacement.selectedShip.id,
+          shipPlacement.selectedShip.name,
+          shipPlacement.selectedShip.size,
+          row,
+          col,
+          shipPlacement.orientation
+        );
+        shipPlacement.markShipAsPlaced(shipPlacement.selectedShip.id);
+        setMessage(`${shipPlacement.selectedShip.name} placed at ${String.fromCharCode(65 + col)}${row + 1}!`);
+      } else {
+        setMessage('Cannot place ship here. Check for overlaps or boundaries.');
+      }
     }
   };
 
@@ -48,10 +88,16 @@ function App() {
   };
 
   const handleCellHover = (row: number, col: number) => {
-    // Optional: could show coordinate info on hover
+    if (gamePhase === 'setup' && shipPlacement.selectedShip) {
+      shipPlacement.setPreview({ row, col });
+    }
   };
 
   const handleStartGame = () => {
+    if (!shipPlacement.allShipsPlaced) {
+      setMessage('Please place all ships before starting the game!');
+      return;
+    }
     setGamePhase('playing');
     setMessage("Let's see if you can handle this, captain...");
     setIsAiTalking(true);
@@ -63,6 +109,7 @@ function App() {
     setIsAiTalking(false);
     playerBoard.resetBoard();
     aiBoard.resetBoard();
+    shipPlacement.resetPlacement();
   };
 
   return (
@@ -77,14 +124,43 @@ function App() {
             onCellClick={handlePlayerCellClick}
             onCellHover={handleCellHover}
             showShips={true}
+            shipPreview={
+              gamePhase === 'setup' && shipPlacement.selectedShip && shipPlacement.previewPosition
+                ? {
+                    row: shipPlacement.previewPosition.row,
+                    col: shipPlacement.previewPosition.col,
+                    size: shipPlacement.selectedShip.size,
+                    orientation: shipPlacement.orientation,
+                    valid: shipPlacement.canPlaceShip(
+                      shipPlacement.previewPosition.row,
+                      shipPlacement.previewPosition.col,
+                      shipPlacement.selectedShip.size,
+                      shipPlacement.orientation,
+                      playerBoard.boardState
+                    ),
+                  }
+                : null
+            }
           />
-          <GameBoard
-            isPlayer={false}
-            boardState={aiBoard.boardState}
-            onCellClick={handleAiCellClick}
-            onCellHover={handleCellHover}
-            showShips={false}
-          />
+          {gamePhase === 'setup' ? (
+            <ShipPlacement
+              ships={shipPlacement.ships}
+              selectedShipId={shipPlacement.selectedShip?.id || null}
+              orientation={shipPlacement.orientation}
+              allShipsPlaced={shipPlacement.allShipsPlaced}
+              onSelectShip={shipPlacement.selectShip}
+              onToggleOrientation={shipPlacement.toggleOrientation}
+              onStartGame={handleStartGame}
+            />
+          ) : (
+            <GameBoard
+              isPlayer={false}
+              boardState={aiBoard.boardState}
+              onCellClick={handleAiCellClick}
+              onCellHover={handleCellHover}
+              showShips={false}
+            />
+          )}
         </div>
 
         <Controls

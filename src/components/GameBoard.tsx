@@ -8,8 +8,23 @@ const GameBoard: React.FC<BoardProps> = ({
   onCellClick,
   onCellHover,
   showShips = true,
+  shipPreview = null,
 }) => {
   const columnLabels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+
+  const isPreviewCell = (row: number, col: number): boolean => {
+    if (!shipPreview) return false;
+
+    for (let i = 0; i < shipPreview.size; i++) {
+      const previewRow = shipPreview.orientation === 'horizontal' ? shipPreview.row : shipPreview.row + i;
+      const previewCol = shipPreview.orientation === 'horizontal' ? shipPreview.col + i : shipPreview.col;
+
+      if (row === previewRow && col === previewCol) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -52,6 +67,8 @@ const GameBoard: React.FC<BoardProps> = ({
                     onClick={() => onCellClick?.(row, col)}
                     onHover={() => onCellHover?.(row, col)}
                     showShip={showShips || isPlayer}
+                    isPreview={isPreviewCell(row, col)}
+                    previewValid={shipPreview?.valid ?? true}
                   />
                 );
               })}

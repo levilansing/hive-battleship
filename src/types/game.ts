@@ -32,6 +32,13 @@ export interface BoardProps {
   onCellClick?: (row: number, col: number) => void;
   onCellHover?: (row: number, col: number) => void;
   showShips?: boolean;
+  shipPreview?: {
+    row: number;
+    col: number;
+    size: number;
+    orientation: Orientation;
+    valid: boolean;
+  } | null;
 }
 
 export interface Ship {

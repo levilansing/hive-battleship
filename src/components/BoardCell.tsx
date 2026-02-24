@@ -6,13 +6,24 @@ interface BoardCellProps {
   onClick: () => void;
   onHover: () => void;
   showShip: boolean;
+  isPreview?: boolean;
+  previewValid?: boolean;
 }
 
 const BoardCell: React.FC<BoardCellProps> = React.memo(
-  ({ cell, onClick, onHover, showShip }) => {
+  ({ cell, onClick, onHover, showShip, isPreview = false, previewValid = true }) => {
     const getCellClasses = () => {
       const base =
         'w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 border border-gray-400 cursor-pointer transition-colors flex items-center justify-center font-bold';
+
+      // Preview state takes precedence during ship placement
+      if (isPreview) {
+        if (previewValid) {
+          return `${base} bg-green-300 border-green-500 border-2`;
+        } else {
+          return `${base} bg-red-300 border-red-500 border-2`;
+        }
+      }
 
       // State-based styling
       if (cell.state === 'hit') return `${base} bg-red-500 text-white`;

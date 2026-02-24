@@ -57,3 +57,12 @@ export interface CellClickEvent {
   row: number;
   col: number;
 }
+
+export type AIMode = 'hunt' | 'target';
+
+export interface AIState {
+  mode: AIMode;
+  targetQueue: { row: number; col: number }[];
+  lastHit: { row: number; col: number } | null;
+  seed: number;
+}
